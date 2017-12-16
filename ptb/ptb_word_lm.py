@@ -37,6 +37,49 @@ import tensorflow as tf
 from ptb import reader
 from ran import RANCell
 
+
+
+from sacred import Experiment
+from sacred.observers import MongoObserver
+ex = Experiment()
+ex.observers.append(MongoObserver.create(
+    url='mongodb://uva:uva@ds159676.mlab.com:59676/uva',
+    db_name='uva'))
+
+@ex.config
+def my_config():
+  init_scale = 0.04
+  learning_rate = 0.8
+  max_grad_norm = 10.0
+  num_layers = 2
+  num_steps = 35
+  hidden_size = 1500
+  max_epoch = 14
+  max_max_epoch = 55
+  keep_prob = 0.35
+  lr_decay = 1 / 1.15
+  batch_size = 20
+  vocab_size = 10000
+  use_tanh = True
+  data_path = "data/simple-examples/data"
+
+class my_config_object(object):
+      init_scale = 0.04
+      learning_rate = 0.8
+      max_grad_norm = 10.0
+      num_layers = 2
+      num_steps = 35
+      hidden_size = 1500
+      max_epoch = 14
+      max_max_epoch = 55
+      keep_prob = 0.35
+      lr_decay = 1 / 1.15
+      batch_size = 20
+      vocab_size = 10000
+      use_tanh = True
+      data_path = "data/simple-examples/data"
+
+
 flags = tf.flags
 logging = tf.logging
 
@@ -178,73 +221,23 @@ class PTBModel(object):
   def train_op(self):
     return self._train_op
 
-
-class TanhMediumConfig(object):
-  """Tanh Medium config."""
-  init_scale = 0.05
-  learning_rate = 1.0
-  max_grad_norm = 5
-  num_layers = 2
-  num_steps = 35
-  hidden_size = 650
-  max_epoch = 6
-  max_max_epoch = 39
-  keep_prob = 0.5
-  lr_decay = 0.8
-  batch_size = 20
-  vocab_size = 10000
-  use_tanh = True
-
-
-class IdentityMediumConfig(object):
-  """Identity Medium config."""
-  init_scale = 0.05
-  learning_rate = 0.8
-  max_grad_norm = 5
-  num_layers = 2
-  num_steps = 35
-  hidden_size = 650
-  max_epoch = 6
-  max_max_epoch = 39
-  keep_prob = 0.5
-  lr_decay = 0.8
-  batch_size = 20
-  vocab_size = 10000
-  use_tanh = False
-
-
-class TanhLargeConfig(object):
-  """Tanh Large config."""
-  init_scale = 0.04
-  learning_rate = 0.8
-  max_grad_norm = 10.0
-  num_layers = 2
-  num_steps = 35
-  hidden_size = 1500
-  max_epoch = 14
-  max_max_epoch = 55
-  keep_prob = 0.35
-  lr_decay = 1 / 1.15
-  batch_size = 20
-  vocab_size = 10000
-  use_tanh = True
-
-
-class IdentityLargeConfig(object):
-  """Identity Large config."""
-  init_scale = 0.04
-  learning_rate = 0.5
-  max_grad_norm = 10.0
-  num_layers = 2
-  num_steps = 35
-  hidden_size = 1500
-  max_epoch = 14
-  max_max_epoch = 55
-  keep_prob = 0.35
-  lr_decay = 1 / 1.15
-  batch_size = 20
-  vocab_size = 10000
-  use_tanh = False
+#
+#
+# class IdentityLargeConfig(object):
+#   """Identity Large config."""
+#   init_scale = 0.04
+#   learning_rate = 0.5
+#   max_grad_norm = 10.0
+#   num_layers = 2
+#   num_steps = 35
+#   hidden_size = 1500
+#   max_epoch = 14
+#   max_max_epoch = 55
+#   keep_prob = 0.35
+#   lr_decay = 1 / 1.15
+#   batch_size = 20
+#   vocab_size = 10000
+#   use_tanh = False
 
 
 def run_epoch(session, model, eval_op=None, verbose=False):
@@ -281,28 +274,29 @@ def run_epoch(session, model, eval_op=None, verbose=False):
   return np.exp(costs / iters)
 
 
-def get_config():
-  if FLAGS.model == "tanh_medium":
-    return TanhMediumConfig()
-  elif FLAGS.model == "identity_medium":
-    return IdentityMediumConfig()
-  elif FLAGS.model == "tanh_large":
-    return TanhLargeConfig()
-  elif FLAGS.model == "identity_large":
-    return IdentityLargeConfig()
-  else:
-    raise ValueError("Invalid model: %s", FLAGS.model)
+# def get_config():
+#   if FLAGS.model == "tanh_medium":
+#     return TanhMediumConfig()
+#   elif FLAGS.model == "identity_medium":
+#     return IdentityMediumConfig()
+#   elif FLAGS.model == "tanh_large":
+#     return TanhLargeConfig()
+#   elif FLAGS.model == "identity_large":
+#     return IdentityLargeConfig()
+#   else:
+#     raise ValueError("Invalid model: %s", FLAGS.model)
 
 
-def main(_):
-  if not FLAGS.data_path:
-    raise ValueError("Must set --data_path to PTB data directory")
+@ex.automain
+def main(init_scale, learning_rate, max_grad_norm, num_layers, num_steps, hidden_size, max_epoch, max_max_epoch, keep_prob, lr_decay, batch_size, vocab_size, use_tanh, data_path, _run):
+#  if not FLAGS.data_path:
+#    raise ValueError("Must set --data_path to PTB data directory")
 
-  raw_data = reader.ptb_raw_data(FLAGS.data_path)
+  raw_data = reader.ptb_raw_data(data_path)
   train_data, valid_data, test_data, _ = raw_data
 
-  config = get_config()
-  eval_config = get_config()
+  config = my_config_object()
+  eval_config = my_config_object()
   eval_config.batch_size = 1
   eval_config.num_steps = 1
 
@@ -339,8 +333,10 @@ def main(_):
         train_perplexity = run_epoch(session, m, eval_op=m.train_op,
                                      verbose=True)
         print("Epoch: %d Train Perplexity: %.3f" % (i + 1, train_perplexity))
+        _run.log_scalar("training.perplexity", train_perplexity, i+1)
         valid_perplexity = run_epoch(session, mvalid)
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
+        _run.log_scalar("validation.perplexity", valid_perplexity, i+1)
 
       test_perplexity = run_epoch(session, mtest)
       print("Test Perplexity: %.3f" % test_perplexity)
@@ -349,6 +345,7 @@ def main(_):
         print("Saving model to %s." % FLAGS.save_path)
         sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 
+      return test_perplexity
 
 if __name__ == "__main__":
   tf.app.run()
